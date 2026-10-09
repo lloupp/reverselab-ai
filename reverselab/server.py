@@ -9,9 +9,16 @@ from urllib.parse import parse_qs, urlsplit
 from .ai import explain, local_url, codex_status, list_openrouter_models
 from .core import MAX_FILE_SIZE, analyze_bytes
 from .ghidra import GhidraError, ghidra_status, analyze_with_ghidra
+from .agent import AgentError, run_agent
+from .sandbox import sandbox_status
+from .store import list_investigations
 
 STATIC = Path(__file__).parent/'static'
 MAX_JSON_SIZE = 128*1024
+MAX_AGENT_JSON_SIZE = 1024*1024
+
+import threading
+_AGENT_LOCK = threading.BoundedSemaphore(1)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -41,10 +48,19 @@ class Handler(BaseHTTPRequestHandler):
                 endpoint=local_url()
             except ValueError:
                 endpoint='Endpoint inválido'
-            self._json(200,{'status':'online','version':'0.3.0','max_file_size':MAX_FILE_SIZE,
+            self._json(200,{'status':'online','version':'0.4.0','max_file_size':MAX_FILE_SIZE,
                              'ai_endpoint':endpoint,'codex':codex_status(),'ghidra':ghidra_status(),
-                             'providers':['local','openrouter','chatgpt'],
+                             'providers':['local','openrouter','chatgpt'],'sandbox':sandbox_status(),
                              'note':'Provedores externos recebem somente evidências e apenas sob clique.'})
+            return
+        if route=='/api/agent/history':
+            sha=parse_qs(urlsplit(self.path).query).get('sha256',[''])[0]
+            try:
+                self._json(200,{'history':list_investigations(sha)})
+            except ValueError as exc:
+                self._json(400,{'error':str(exc)})
+            except OSError:
+                self._json(503,{'error':'Histórico local indisponível.'})
             return
         if route=='/api/models':
             try:
@@ -105,6 +121,34 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400,{'error':str(ex)})
             except GhidraError as ex:
                 self._json(503,{'error':str(ex)})
+            return
+        if parts.path=='/api/agent/run':
+            if self.headers.get('Content-Type','').split(';')[0] != 'application/json':
+                self._json(415,{'error':'JSON obrigatório.'})
+                return
+            body=self._read_body(MAX_AGENT_JSON_SIZE)
+            if body is None:
+                return
+            if not _AGENT_LOCK.acquire(blocking=False):
+                self._json(429,{'error':'Uma investigação já está em andamento.'})
+                return
+            try:
+                message=json.loads(body)
+                if not isinstance(message,dict):
+                    raise ValueError('Solicitação inválida.')
+                output=run_agent(
+                    message.get('report'),message.get('goal',''),
+                    provider=message.get('provider','local'),model=message.get('model',''),
+                    key=message.get('api_key',''),
+                    allow_candidate_tests=message.get('allow_candidate_tests',False),
+                    steps=message.get('steps',5))
+                self._json(200,output)
+            except (ValueError,TypeError,KeyError) as exc:
+                self._json(400,{'error':str(exc)[:500]})
+            except (RuntimeError,OSError) as exc:
+                self._json(503,{'error':'Investigação indisponível: '+str(exc)[:350]})
+            finally:
+                _AGENT_LOCK.release()
             return
         if parts.path=='/api/explain':
             if self.headers.get('Content-Type','').split(';')[0] != 'application/json':
