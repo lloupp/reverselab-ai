@@ -1,5 +1,6 @@
 'use strict';
 let current = null;
+let selectedBinaryFile = null;
 const $ = id => document.getElementById(id);
 const escapeHTML = x => String(x ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = n => n < 1024 ? `${n} B` : n < 1024*1024 ? `${(n/1024).toFixed(1)} KiB` : `${(n/1048576).toFixed(2)} MiB`;
@@ -8,7 +9,7 @@ function message(text, kind='') { $('message').textContent=text; $('message').cl
 function route(id) {
   document.querySelectorAll('.screen').forEach(x=>x.hidden=x.id!==id);
   document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.screen===id));
-  $('crumb').textContent={overview:'Visão geral',sections:'Seções e símbolos',strings:'Strings',assembly:'Desassemblagem',ai:'Assistente IA'}[id];
+  $('crumb').textContent={overview:'Visão geral',sections:'Seções e símbolos',strings:'Strings',assembly:'Desassemblagem',ghidra:'Funções e chamadas',ai:'Assistente IA'}[id];
 }
 document.querySelectorAll('.nav').forEach(btn=>btn.addEventListener('click',()=>route(btn.dataset.screen)));
 const zone=$('dropzone');
@@ -31,10 +32,11 @@ async function analyzeFile(file){
     const obj=await res.json();
     if(!res.ok) throw Error(obj.error || `HTTP ${res.status}`);
     current=obj;
+    selectedBinaryFile=file;
     render(obj);
     $('results').hidden=false;
     route('overview');
-    message('Análise concluída. Nenhum código do arquivo foi executado.','good');
+    message('Análise preliminar concluída. Nenhum código do arquivo foi executado.','good');
     $('results').scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){message('Falha na análise: '+e.message,'error');}
 }
@@ -64,6 +66,7 @@ function render(r){
   $('asmlines').innerHTML=r.disassembly.instructions.map(i=>`<div class="asm-line"><span>${escapeHTML(i.address)}</span><span>${escapeHTML(i.bytes)}</span><span><strong>${escapeHTML(i.mnemonic)}</strong> ${escapeHTML(i.operands)}</span></div>`).join('') || empty('Nenhuma instrução decodificada.');
   $('asmnote').textContent=r.disassembly.note;
   $('airesponse').textContent='Aguardando pergunta. O modelo só será consultado após clicar no botão.';
+  renderDeep(r);
 }
 function renderStrings(){
   if(!current)return;
@@ -71,6 +74,70 @@ function renderStrings(){
   const filtered=current.strings.filter(s=>[s.value,s.category,s.offset].some(v=>String(v).toLowerCase().includes(q)));
   $('stringrows').innerHTML=filtered.map(s=>`<tr><td class="code">${escapeHTML(s.offset)}</td><td>${escapeHTML(s.encoding)}</td><td>${escapeHTML(s.category)}</td><td class="code">${escapeHTML(s.value)}</td></tr>`).join('') || `<tr><td colspan="4">Sem strings correspondentes.</td></tr>`;
 }
+// Deep analysis is opt-in: the selected file is kept in browser memory only.
+let ghidraAvailable=false;
+function renderDeep(report){
+  const d=report.deep_analysis;
+  const funcs=d?.functions||[];
+  $('deep-count').textContent=funcs.length+' funções';
+  $('deep-functions').replaceChildren();
+  if(!funcs.length){$('deep-functions').innerHTML=empty('Execute o Ghidra para descobrir funções e chamadas.');}
+  for(const fn of funcs){
+    const button=document.createElement('button');
+    button.type='button';button.className='function-choice';
+    button.textContent=`${fn.address}  ${fn.name}`;
+    button.addEventListener('click',()=>chooseFunction(fn.address));
+    $('deep-functions').append(button);
+  }
+  $('edges-count').textContent=(d?.edges?.length||0)+' ligações';
+  $('edges-list').innerHTML=(d?.edges||[]).map(e=>`<div class="list-row"><span class="code">${escapeHTML(e.from)}</span><small>→ ${escapeHTML(e.to)}</small></div>`).join('')||empty('Nenhuma chamada entre funções identificadas na amostra.');
+  $('deep-note').textContent=d?.note||(ghidraAvailable?'Pronto para analisar arquivo ELF/PE.':'Configure Ghidra Headless para habilitar.');
+  const selected=funcs.find(f=>f.address===report.selected_function_address);
+  if(selected)chooseFunction(selected.address);
+  else{
+    $('selected-address').textContent='—';$('selected-meta').textContent='Nenhuma função selecionada.';
+    $('selected-pseudocode').textContent='Selecione uma função após analisar com o Ghidra.';
+    $('ask-function').disabled=true;
+  }
+}
+function chooseFunction(address){
+  if(!current?.deep_analysis)return;
+  const fn=current.deep_analysis.functions.find(f=>f.address===address);
+  if(!fn)return;
+  current.selected_function_address=address;
+  $('selected-address').textContent=address;
+  $('selected-meta').textContent=`${fn.name} · ${fn.size} bytes · ${fn.calls.length} chamadas detectadas`;
+  $('selected-pseudocode').textContent=fn.pseudocode||'Ghidra não gerou pseudocódigo para esta função.';
+  $('ask-function').disabled=false;
+  document.querySelectorAll('.function-choice').forEach(btn=>btn.classList.toggle('selected',btn.textContent.startsWith(address+'  ')));
+}
+$('ask-function').addEventListener('click',()=>{
+  const fn=current?.deep_analysis?.functions?.find(f=>f.address===current.selected_function_address);
+  if(!fn)return;
+  $('question').value=`Explique a função ${fn.name} (${fn.address}), suas chamadas e as evidências do pseudocódigo. Diferencie fatos e hipóteses.`;
+  route('ai');
+});
+$('deep-analyze').addEventListener('click',async()=>{
+  if(!selectedBinaryFile || !current || !ghidraAvailable)return;
+  const file=selectedBinaryFile, btn=$('deep-analyze');
+  btn.disabled=true;btn.textContent='Analisando com Ghidra…';
+  $('deep-note').textContent='Ghidra em andamento (o arquivo analisado não é executado).';
+  try{
+    const r=await fetch('/api/ghidra/analyze?filename='+encodeURIComponent(file.name),{
+      method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});
+    const obj=await r.json();if(!r.ok)throw Error(obj.error||`HTTP ${r.status}`);
+    if(obj.sha256!==current.sha256)throw Error('Arquivo não corresponde à análise preliminar.');
+    current.deep_analysis=obj.deep_analysis;current.selected_function_address=null;
+    renderDeep(current);
+    message(`${obj.deep_analysis.functions.length} funções analisadas pelo Ghidra.`, 'good');
+  }catch(e){$('deep-note').textContent='Falha: '+e.message;message('Ghidra: '+e.message,'error');}
+  finally{btn.disabled=!ghidraAvailable;btn.textContent='Aprofundar com Ghidra';}
+});
+fetch('/api/status').then(r=>r.json()).then(s=>{
+  ghidraAvailable=Boolean(s.ghidra?.available);
+  $('ghidra-status').textContent=s.ghidra?.message||'Ghidra não disponível.';
+  $('deep-analyze').disabled=!ghidraAvailable;
+}).catch(()=>{$('ghidra-status').textContent='Status Ghidra indisponível.';});
 $('stringfilter').addEventListener('input',renderStrings);
 function download(name,content,type){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -79,7 +146,10 @@ function md(r){let b=r.binary;
   const line=[`# ReverseLab AI — ${r.filename}`,'',`Formato: ${b.format}`,`Arquitetura: ${b.architecture}`,`Tamanho: ${r.size} bytes`,`SHA-256: ${r.sha256}`,`Entropia: ${r.entropy} bits/byte`,'',
     '## Observações',...r.observations.map(o=>`- ${o.label}: ${o.meaning}\n  Evidência: ${o.evidence}`),'','## Seções',...b.sections.map(s=>`- ${s.name}: ${s.size} bytes @ 0x${s.offset.toString(16)}`),'',
     '## Importações',...b.imports.map(i=>`- ${i}`),'','## Símbolos',...b.functions.map(f=>`- ${f.name} @ ${f.address}`),'','## Strings',...r.strings.map(s=>`- ${s.offset}: ${JSON.stringify(s.value)}`),'',
-    `## Instruções (${r.disassembly.backend})`,'```asm',...r.disassembly.instructions.map(i=>`${i.address}: ${i.mnemonic} ${i.operands}`),'```','',r.disassembly.note,'',r.disclaimer];
+    `## Instruções (${r.disassembly.backend})`,'```asm',...r.disassembly.instructions.map(i=>`${i.address}: ${i.mnemonic} ${i.operands}`),'```','',r.disassembly.note,
+    ...(r.deep_analysis ? ['','## Funções (Ghidra Headless)',...r.deep_analysis.functions.flatMap(fn=>[
+      `### ${fn.name} (${fn.address})`, `Chamadas: ${fn.calls.join(', ')||'não identificadas'}`, '```c',fn.pseudocode||'// Pseudocódigo indisponível','```',
+    ]),'','## Arestas do grafo',...r.deep_analysis.edges.map(edge=>`- ${edge.from} → ${edge.to}`)] : []), '',r.disclaimer];
   return line.join('\n');
 }
 $('exportjson').addEventListener('click',()=>{if(current)download('reverselab-report.json',JSON.stringify(current,null,2),'application/json');});

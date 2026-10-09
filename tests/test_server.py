@@ -47,6 +47,32 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertEqual(json.loads(body)['filename'],'test.bin')
 
+    def test_ghidra_status_and_deep_endpoint(self):
+        from reverselab.ghidra import GhidraError
+        with patch('reverselab.server.ghidra_status', return_value={'available': False, 'message': 'Não instalado'}):
+            code, body, _ = self.request('GET', '/api/status')
+        self.assertEqual(code, 200)
+        self.assertFalse(json.loads(body)['ghidra']['available'])
+        with patch('reverselab.server.analyze_with_ghidra', side_effect=GhidraError('Ghidra not enabled')):
+            code, body, _ = self.request('POST', '/api/ghidra/analyze', b'NOPE', 'application/octet-stream')
+        # Only valid binaries may be submitted to deep analysis.
+        self.assertEqual(code, 503)
+        self.assertIn('Ghidra', json.loads(body)['error'])
+
+    def test_ghidra_endpoint_uses_opt_in_and_respects_normal_analysis(self):
+        from reverselab.ghidra import _validated_export
+        export = _validated_export({'schema_version': 1, 'functions': [
+            {'name': 'main', 'address': '0x1000', 'size': 10, 'calls': [], 'pseudocode': 'return 42;'}]})
+        with patch('reverselab.server.analyze_with_ghidra', return_value=export) as gh:
+            status, body, _ = self.request('POST', '/api/analyze', b'ABCDEF', 'application/octet-stream')
+            self.assertEqual(status, 200)
+            self.assertNotIn('deep_analysis', json.loads(body))
+            gh.assert_not_called()
+            status, body, _ = self.request('POST', '/api/ghidra/analyze', b'ABCDEF', 'application/octet-stream')
+            self.assertEqual(status, 200)
+            self.assertEqual(len(json.loads(body)['deep_analysis']['functions']), 1)
+            gh.assert_called_once()
+
     def test_rejected_content_type_and_size(self):
         code,body,_=self.request('POST','/api/analyze',b'ABC','text/plain')
         self.assertEqual(code,415)

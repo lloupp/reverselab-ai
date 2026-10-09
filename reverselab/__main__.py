@@ -12,6 +12,7 @@ def main(argv=None) -> int:
     run=subs.add_parser('analyze',help='Analisar um arquivo offline')
     run.add_argument('file',type=Path)
     run.add_argument('--format',choices=('json','md'),default='md')
+    run.add_argument('--ghidra',action='store_true',help='Ativar análise opcional Ghidra Headless para ELF/PE')
     run.add_argument('--output',type=Path)
     web=subs.add_parser('serve',help='Iniciar interface web local')
     web.add_argument('--port',type=int,default=8765)
@@ -25,6 +26,9 @@ def main(argv=None) -> int:
             raise ValueError(f'Limite de {MAX_FILE_SIZE//1024//1024} MiB.')
         data=a.file.read_bytes()
         report=analyze_bytes(data,a.file.name)
+        if a.ghidra:
+            from .ghidra import analyze_with_ghidra
+            report['deep_analysis']=analyze_with_ghidra(data,a.file.name)
         output=(json.dumps(report,ensure_ascii=False,indent=2)+'\n') if a.format=='json' else markdown_report(report)
         if a.output:
             a.output.write_text(output,encoding='utf-8')
@@ -32,7 +36,7 @@ def main(argv=None) -> int:
         else:
             print(output)
         return 0
-    except (OSError,ValueError) as ex:
+    except (OSError,ValueError,RuntimeError) as ex:
         print(f'Erro: {ex}',file=sys.stderr)
         return 2
 

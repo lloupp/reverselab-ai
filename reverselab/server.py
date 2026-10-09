@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .ai import explain, local_url, codex_status, list_openrouter_models
 from .core import MAX_FILE_SIZE, analyze_bytes
+from .ghidra import GhidraError, ghidra_status, analyze_with_ghidra
 
 STATIC = Path(__file__).parent/'static'
 MAX_JSON_SIZE = 128*1024
@@ -40,8 +41,8 @@ class Handler(BaseHTTPRequestHandler):
                 endpoint=local_url()
             except ValueError:
                 endpoint='Endpoint inválido'
-            self._json(200,{'status':'online','version':'0.2.0','max_file_size':MAX_FILE_SIZE,
-                             'ai_endpoint':endpoint,'codex':codex_status(),
+            self._json(200,{'status':'online','version':'0.3.0','max_file_size':MAX_FILE_SIZE,
+                             'ai_endpoint':endpoint,'codex':codex_status(),'ghidra':ghidra_status(),
                              'providers':['local','openrouter','chatgpt'],
                              'note':'Provedores externos recebem somente evidências e apenas sob clique.'})
             return
@@ -87,7 +88,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         parts=urlsplit(self.path)
 
-        if parts.path=='/api/analyze':
+        if parts.path in ('/api/analyze', '/api/ghidra/analyze'):
             if self.headers.get('Content-Type','').split(';')[0] != 'application/octet-stream':
                 self._json(415,{'error':'Envie bytes com Content-Type application/octet-stream.'})
                 return
@@ -96,9 +97,14 @@ class Handler(BaseHTTPRequestHandler):
                 return
             filename=parse_qs(parts.query).get('filename',['arquivo.bin'])[0]
             try:
-                self._json(200,analyze_bytes(body,filename))
+                report = analyze_bytes(body, filename)
+                if parts.path == '/api/ghidra/analyze':
+                    report['deep_analysis'] = analyze_with_ghidra(body, filename)
+                self._json(200, report)
             except (ValueError,TypeError) as ex:
                 self._json(400,{'error':str(ex)})
+            except GhidraError as ex:
+                self._json(503,{'error':str(ex)})
             return
         if parts.path=='/api/explain':
             if self.headers.get('Content-Type','').split(';')[0] != 'application/json':

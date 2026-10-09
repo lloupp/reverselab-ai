@@ -47,7 +47,27 @@ def _evidence(report: dict[str, Any]) -> dict[str, Any]:
         'strings': [s['value'][:120] for s in report['strings'][:45]],
         'observations': report['observations'][:8],
         'disassembly': [f"{i['mnemonic']} {i['operands']}" for i in report['disassembly']['instructions'][:70]],
+        'ghidra_selected_function': _selected_function(report),
     }
+
+
+def _selected_function(report: dict[str, Any]) -> dict[str, Any] | None:
+    """Only a selected function is sent; no full decompiled program or binary."""
+    deep = report.get('deep_analysis')
+    if not isinstance(deep, dict):
+        return None
+    functions = deep.get('functions')
+    if not isinstance(functions, list):
+        return None
+    selected = report.get('selected_function_address')
+    fn = next((f for f in functions if isinstance(f, dict) and f.get('address') == selected), None)
+    if fn is None:
+        return None
+    return {'name': str(fn.get('name', ''))[:140],
+            'address': str(fn.get('address', ''))[:22],
+            'calls': [str(x)[:22] for x in fn.get('calls', [])[:30]],
+            'pseudocode': str(fn.get('pseudocode', ''))[:4400],
+            'source': 'Ghidra (heuristic decompilation, untrusted)'}
 
 
 def _messages(report: dict[str, Any], question: str) -> list[dict[str, str]]:
