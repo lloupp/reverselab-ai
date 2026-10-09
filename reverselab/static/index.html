@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>ReverseLab AI — laboratório de binários</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <div class="logo"><div class="logo-mark">R<span>.</span></div><div><strong>ReverseLab <em>AI</em></strong><small>LABORATÓRIO LOCAL</small></div></div>
+      <div class="side-group">
+        <div class="side-label">LABORATÓRIO</div>
+        <button class="nav active" data-screen="overview"><span class="nav-icon">◈</span> Visão geral</button>
+        <button class="nav" data-screen="sections"><span class="nav-icon">▦</span> Seções e símbolos</button>
+        <button class="nav" data-screen="strings"><span class="nav-icon">≡</span> Strings</button>
+        <button class="nav" data-screen="assembly"><span class="nav-icon">⌘</span> Desassemblagem</button>
+        <button class="nav" data-screen="ai"><span class="nav-icon">✦</span> Assistente IA</button>
+      </div>
+      <div class="sidebar-foot"><div class="status"><span class="dot"></span> Processo local · somente leitura</div><p>Os programas analisados nunca são executados.</p><span class="version">v0.2.0 · MVP</span></div>
+    </aside>
+    <main class="main">
+      <header class="top"><div class="breadcrumb">Workspace <span>/</span> <strong id="crumb">Visão geral</strong></div><div class="top-right"><span class="chip">OFFLINE-FIRST</span><span class="avatar">RL</span></div></header>
+      <div class="content">
+        <div class="heading"><div><div class="eyebrow">ANÁLISE ESTÁTICA DE SOFTWARE</div><h1>Entenda o que existe <em>dentro do código.</em></h1><p>Inspecione executáveis, identifique estruturas e investigue instruções com apoio de IA local, OpenRouter ou sua conta ChatGPT pelo Codex.</p></div></div>
+        <div class="upload" id="dropzone" role="button" tabindex="0" aria-label="Selecionar arquivo binário"><input id="file" type="file" hidden><div class="upload-icon">↥</div><div><h2>Arraste um arquivo para começar</h2><p>ou <span>selecione no computador</span> · ELF, EXE/DLL (PE), Mach-O e ROM de N64 · até 16 MiB</p></div><button id="pick" class="upload-action" type="button">Escolher arquivo ↗</button></div>
+        <div id="message" class="message" role="status" aria-live="polite">Nenhum arquivo foi analisado ainda.</div>
+        <section id="results" hidden>
+          <div class="filebar"><div class="file-ident"><div class="file-icon">01</div><div><div id="filename" class="file-name">—</div><div id="filehash" class="file-hash">—</div></div></div><div class="export"><button id="exportmd" class="quiet">↓ Relatório MD</button><button id="exportjson" class="quiet">↓ JSON</button></div></div>
+          <div id="overview" class="screen">
+            <div class="metrics"><div class="metric"><small>FORMATO</small><strong id="mformat">—</strong><span>Tipo de arquivo</span></div><div class="metric"><small>ARQUITETURA</small><strong id="march">—</strong><span>Processador-alvo</span></div><div class="metric"><small>TAMANHO</small><strong id="msize">—</strong><span>Arquivo inspecionado</span></div><div class="metric"><small>ENTROPIA</small><strong id="mentropy">—</strong><span>Bits por byte</span></div></div>
+            <div class="twocol"><article class="panel"><div class="panel-head"><h3>Resumo técnico</h3><span class="muted">DADOS DO CABEÇALHO</span></div><div id="summary" class="fact-list"></div></article><article class="panel"><div class="panel-head"><h3>Observações</h3><span class="muted">HEURÍSTICAS</span></div><div id="observations"></div></article></div>
+            <div class="info"><span>ⓘ</span><div>Esta análise é <strong>estática e preliminar</strong>. Evidências não comprovam comportamento em tempo de execução. Nenhum executável é iniciado.</div></div>
+          </div>
+          <div id="sections" class="screen" hidden><article class="panel"><div class="panel-head"><h3>Seções do binário</h3><span id="nsections" class="muted"></span></div><div class="table-scroll"><table><thead><tr><th>NOME</th><th>OFFSET</th><th>TAMANHO</th><th>EXECUTÁVEL</th></tr></thead><tbody id="sectionrows"></tbody></table></div></article><article class="panel panel-gap"><div class="panel-head"><h3>Funções e símbolos identificados</h3><span id="nfunctions" class="muted"></span></div><div id="functionrows" class="data-list"></div></article><article class="panel panel-gap"><div class="panel-head"><h3>Importações e dependências</h3><span id="nimports" class="muted"></span></div><div id="imports" class="tag-list"></div></article></div>
+          <div id="strings" class="screen" hidden><article class="panel"><div class="panel-head"><div><h3>Strings identificadas</h3><span class="muted">AMOSTRA LIMITADA · NÃO EXAUSTIVA</span></div><input id="stringfilter" class="filter" placeholder="Filtrar strings…" aria-label="Filtrar strings"></div><div class="table-scroll"><table><thead><tr><th>OFFSET</th><th>CODIFICAÇÃO</th><th>CATEGORIA</th><th>VALOR</th></tr></thead><tbody id="stringrows"></tbody></table></div></article></div>
+          <div id="assembly" class="screen" hidden><article class="panel"><div class="panel-head"><div><h3>Desassemblagem parcial</h3><div id="backend" class="muted"></div></div><span class="badge">SOMENTE LEITURA</span></div><div class="asm-head"><span>ENDEREÇO</span><span>BYTES</span><span>INSTRUÇÃO</span></div><div id="asmlines" class="asm"></div><div id="asmnote" class="inline-note"></div></article></div>
+          <div id="ai" class="screen" hidden>
+            <article class="panel">
+              <div class="panel-head"><h3>Assistente de engenharia reversa</h3><span class="badge ai-badge">ESCOLHA SEU MODELO</span></div>
+              <p class="ai-note">A análise estática permanece no computador. Ao clicar em <strong>Consultar IA</strong>, somente um resumo limitado das evidências (incluindo possíveis strings privadas) será enviado ao provedor selecionado. O arquivo original não é enviado. Considere custos e políticas de privacidade de serviços externos.</p>
+              <div class="provider-box">
+                <label for="provider">Provedor de IA</label>
+                <select id="provider" class="provider-control" aria-label="Provedor">
+                  <option value="local">Modelo local (Colibrì / Ollama / OpenAI-compatible)</option>
+                  <option value="openrouter">OpenRouter (minha API key)</option>
+                  <option value="chatgpt">Minha conta ChatGPT (via Codex CLI)</option>
+                </select>
+                <div id="openrouter-options" hidden>
+                  <label for="openrouter-key">API key OpenRouter</label>
+                  <input id="openrouter-key" class="provider-control" type="password" autocomplete="off" spellcheck="false" placeholder="sk-or-v1-… (ou variável OPENROUTER_API_KEY)">
+                  <p class="field-note">A chave é usada somente na solicitação atual, não é salva em arquivo, cookies ou armazenamento do navegador. Alternativamente defina OPENROUTER_API_KEY no terminal.</p>
+                  <button id="fetch-models" class="quiet" type="button">Carregar modelos disponíveis</button>
+                  <span id="models-status" class="muted" aria-live="polite"></span>
+                </div>
+                <div id="chatgpt-options" hidden>
+                  <p class="field-note">Instale o <strong>Codex CLI</strong>, execute <code>codex login</code> no terminal e entre com sua conta ChatGPT. O ReverseLab verifica sua sessão existente, sem pedir senha ou acessar tokens.</p>
+                  <div class="ai-row"><span id="codex-status" class="muted">Verificando Codex…</span><button id="check-codex" class="quiet" type="button">Verificar conexão</button></div>
+                </div>
+                <label for="model">Modelo</label>
+                <input id="model" class="provider-control" list="models-list" type="text" maxlength="160" placeholder="qwen3-coder-30b" autocomplete="off" spellcheck="false">
+                <datalist id="models-list"></datalist>
+                <p class="field-note" id="model-help">Deixe vazio para usar o modelo local configurado.</p>
+              </div>
+              <label for="question">O que você deseja investigar?</label>
+              <textarea id="question" rows="3" maxlength="1200" placeholder="Ex.: Quais funções o binário parece ter e quais evidências sustentam essa hipótese?"></textarea>
+              <div class="ai-row"><span id="ai-endpoint" class="muted">Conexão somente sob comando</span><button id="ask" class="primary">✦ Consultar IA</button></div>
+              <div id="airesponse" class="ai-response" aria-live="polite">Escolha um provedor e faça uma pergunta após analisar um arquivo.</div>
+            </article>
+          </div>
+        </section>
+        <footer>REVERSELAB AI <span>·</span> Feito para explorar, compreender e documentar binários de forma responsável.</footer>
+      </div>
+    </main>
+  </div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

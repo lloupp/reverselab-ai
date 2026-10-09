@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+examples/hello
+examples/hello.exe
+*.jsonl
+.env
+.env.*
+!.env.example
+.codex/
+*token*
+*credentials*
