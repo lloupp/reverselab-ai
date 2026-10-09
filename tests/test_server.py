@@ -73,6 +73,30 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(len(json.loads(body)['deep_analysis']['functions']), 1)
             gh.assert_called_once()
 
+    def test_agent_api_history_and_security_defaults(self):
+        import tempfile
+        from pathlib import Path
+        from reverselab.agent import run_agent
+        report=analyze_bytes(b'HTTP_AGENT_VALID_SAMPLE')
+        def one_step(*args,**kwargs):
+            kwargs['decide']=lambda *_: json.dumps({'tool':'finish','args':{'summary':'Identificação estática limitada.'}})
+            return run_agent(*args,**kwargs)
+        with tempfile.TemporaryDirectory() as root,patch.dict(os.environ,{'REVERSELAB_DB_PATH':str(Path(root)/'history.sqlite3')}),patch('reverselab.server.run_agent',side_effect=one_step):
+            data=json.dumps({'report':report,'goal':'Entenda a entrada','provider':'local','steps':1}).encode()
+            code,body,_=self.request('POST','/api/agent/run',data,'application/json')
+            self.assertEqual(code,200)
+            answer=json.loads(body)
+            self.assertEqual(answer['status'],'completed')
+            self.assertEqual(answer['trace'][0]['tool'],'finish')
+            code,body,_=self.request('GET','/api/agent/history?sha256='+report['sha256'])
+            self.assertEqual(code,200)
+            self.assertEqual(len(json.loads(body)['history']),1)
+            self.assertNotIn('api_key',body.decode())
+        code,body,_=self.request('GET','/api/agent/history?sha256=bad')
+        self.assertEqual(code,400)
+        code,body,_=self.request('POST','/api/agent/run',b'x','text/plain')
+        self.assertEqual(code,415)
+
     def test_rejected_content_type_and_size(self):
         code,body,_=self.request('POST','/api/analyze',b'ABC','text/plain')
         self.assertEqual(code,415)

@@ -97,3 +97,13 @@ Adaptador `reverselab/ai.py`: provedor `local` restringe URL a loopback; `openro
 - Não houve integração do grafo de fluxo de controle intrafunção (CFG): o grafo implementado é de **chamadas entre funções**.
 
 **Evidência de teste:** 31 testes locais, incluindo dois programas ELF reais de formatos válidos e integração com processo Ghidra simulado. Ghidra real indisponível neste ambiente, portanto a exportação Jython não foi verificada em runtime.
+
+## v0.4 — Agente controlador, evidências e testes isolados
+
+- `reverselab/agent.py`: loop de até seis ações escolhidas pelo modelo, com validação de JSON, endereços do Ghidra e allowlist de ferramentas. As respostas do binário, do Ghidra, da IA e do histórico são dados não confiáveis. Não há shell arbitrário exposto ao agente.
+- Ferramentas: `inspect_overview`, `list_functions`, `inspect_function`, `trace_calls`, `propose_c`, `verify_c`, `record_finding`, `finish`.
+- `reverselab/store.py`: SQLite local de investigações, indexado por SHA-256, persistido **somente após iniciar a investigação**. Guarda passos, resultados e reconstruções candidatas; **não** guarda chaves nem bytes do binário. Caminho padrão em `~/.local/state/reverselab-ai/investigations.sqlite3`, ou `REVERSELAB_DB_PATH`.
+- `reverselab/sandbox.py`: teste opcional **somente de código C reconstruído**, com assinatura restrita `int target(int a,int b)`. Exige Docker CLI, imagem `gcc:13` local e aprovação explícita. Isolamento configura rede desativada, memória/CPU limitadas, root filesystem somente leitura, usuário não privilegiado e remoção de capacidades. Não há fallback inseguro; não constitui barreira forte para programas adversariais e não prova equivalência.
+- Endpoints: `POST /api/agent/run` (máximo 1 MiB de JSON), `GET /api/agent/history?sha256=...`; execução limitada a **uma investigação simultânea**.
+- ChatGPT/Codex, OpenRouter e LLM local continuam opcionais; cada etapa pode consumir tokens/créditos. A decisão de ação vem do modelo; a execução é sempre mediada pelo controlador com validação e autorização.
+- Limitação crucial: os testes gerados pela própria IA avaliam **consistência com a hipótese da IA**, e não equivalência comportamental com o executável original. A comparação com um oráculo externo confiável ainda é trabalho futuro.

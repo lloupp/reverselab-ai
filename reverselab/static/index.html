@@ -19,8 +19,9 @@
         <button class="nav" data-screen="strings"><span class="nav-icon">≡</span> Strings</button>
         <button class="nav" data-screen="assembly"><span class="nav-icon">⌘</span> Desassemblagem</button>
         <button class="nav" data-screen="ai"><span class="nav-icon">✦</span> Assistente IA</button>
+        <button class="nav" data-screen="agent"><span class="nav-icon">⚙</span> Agente autônomo</button>
       </div>
-      <div class="sidebar-foot"><div class="status"><span class="dot"></span> Processo local · somente leitura</div><p>Os programas analisados nunca são executados.</p><span class="version">v0.3.0 · EXPERIMENTAL</span></div>
+      <div class="sidebar-foot"><div class="status"><span class="dot"></span> Processo local · somente leitura</div><p>Arquivos originais nunca são executados. Testes de candidatos exigem Docker e autorização.</p><span class="version">v0.4.0 · EXPERIMENTAL</span></div>
     </aside>
     <main class="main">
       <header class="top"><div class="breadcrumb">Workspace <span>/</span> <strong id="crumb">Visão geral</strong></div><div class="top-right"><span class="chip">OFFLINE-FIRST</span><span class="avatar">RL</span></div></header>
@@ -81,6 +82,37 @@
               <textarea id="question" rows="3" maxlength="1200" placeholder="Ex.: Quais funções o binário parece ter e quais evidências sustentam essa hipótese?"></textarea>
               <div class="ai-row"><span id="ai-endpoint" class="muted">Conexão somente sob comando</span><button id="ask" class="primary">✦ Consultar IA</button></div>
               <div id="airesponse" class="ai-response" aria-live="polite">Escolha um provedor e faça uma pergunta após analisar um arquivo.</div>
+            </article>
+          </div>
+          <div id="agent" class="screen" hidden>
+            <article class="panel">
+              <div class="panel-head"><h3>Agente de engenharia reversa</h3><span class="badge">EXPERIMENTAL v0.4</span></div>
+              <p class="ai-note">O modelo escolhe ferramentas de análise, investiga funções e pode propor C reconstruído. Configure o provedor e o modelo na aba <strong>Assistente IA</strong>. Cada etapa usa o provedor escolhido e pode consumir créditos. A execução de código gerado é opcional e <strong>nunca comprova equivalência com o executável original</strong>.</p>
+              <label for="agent-goal">Objetivo de investigação</label>
+              <textarea id="agent-goal" maxlength="1200" rows="3" placeholder="Identifique funções principais, investigue chamadas e tente reconstruir uma função simples com evidências."></textarea>
+              <div class="provider-box">
+                <label for="agent-steps">Limite de decisões da IA</label>
+                <select id="agent-steps" class="provider-control">
+                  <option value="3">3 etapas — rápida</option>
+                  <option value="5" selected>5 etapas — padrão</option>
+                  <option value="6">6 etapas — aprofundada</option>
+                </select>
+                <label class="agent-consent"><input id="agent-allow-test" type="checkbox"> Autorizo compilar e testar apenas o C gerado dentro de um container Docker isolado, sem rede, usando a imagem gcc:13 já instalada.</label>
+                <p class="field-note" id="agent-sandbox-status">Docker: verificando…</p>
+              </div>
+              <div class="ai-row"><span id="agent-status" class="muted" aria-live="polite">Nenhuma investigação iniciada.</span><button id="agent-run" class="primary" type="button">Iniciar investigação</button></div>
+            </article>
+            <article class="panel panel-gap">
+              <div class="panel-head"><h3>Trilha de investigação</h3><span class="muted" id="agent-step-count">0 etapas</span></div>
+              <div id="agent-trace" class="data-list" aria-live="polite">Aguardando primeira execução.</div>
+              <h3>Reconstrução candidata</h3>
+              <p id="agent-candidate-note" class="muted">A IA ainda não propôs código.</p>
+              <pre id="agent-source" class="code-preview">—</pre>
+              <button id="agent-export" class="quiet" type="button" disabled>Exportar investigação JSON ↓</button>
+            </article>
+            <article class="panel panel-gap">
+              <div class="panel-head"><h3>Histórico local</h3><span class="muted">SQLite · por SHA-256</span></div>
+              <div id="agent-history" class="data-list">Carregue um binário para visualizar investigações anteriores.</div>
             </article>
           </div>
         </section>

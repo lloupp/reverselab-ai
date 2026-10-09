@@ -9,7 +9,7 @@ function message(text, kind='') { $('message').textContent=text; $('message').cl
 function route(id) {
   document.querySelectorAll('.screen').forEach(x=>x.hidden=x.id!==id);
   document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.screen===id));
-  $('crumb').textContent={overview:'Visão geral',sections:'Seções e símbolos',strings:'Strings',assembly:'Desassemblagem',ghidra:'Funções e chamadas',ai:'Assistente IA'}[id];
+  $('crumb').textContent={overview:'Visão geral',sections:'Seções e símbolos',strings:'Strings',assembly:'Desassemblagem',ghidra:'Funções e chamadas',ai:'Assistente IA',agent:'Agente autônomo'}[id];
 }
 document.querySelectorAll('.nav').forEach(btn=>btn.addEventListener('click',()=>route(btn.dataset.screen)));
 const zone=$('dropzone');
@@ -67,6 +67,8 @@ function render(r){
   $('asmnote').textContent=r.disassembly.note;
   $('airesponse').textContent='Aguardando pergunta. O modelo só será consultado após clicar no botão.';
   renderDeep(r);
+  resetAgent();
+  loadAgentHistory();
 }
 function renderStrings(){
   if(!current)return;
@@ -209,3 +211,87 @@ $('ask').addEventListener('click',async()=>{
   finally{btn.disabled=false;btn.textContent='✦ Consultar IA';}
 });
 fetch('/api/status').then(r=>r.json()).then(d=>{ $('codex-status').textContent=d.codex?.message||'Não verificado'; }).catch(()=>{});
+
+
+// v0.4: model-controlled allowlisted tools. Original binaries stay in the browser.
+let lastAgentResult=null;
+function resetAgent(){
+  lastAgentResult=null;
+  $('agent-trace').textContent='Aguardando primeira execução.';
+  $('agent-step-count').textContent='0 etapas';
+  $('agent-status').textContent='Nenhuma investigação iniciada.';
+  $('agent-source').textContent='—';
+  $('agent-candidate-note').textContent='A IA ainda não propôs código.';
+  $('agent-export').disabled=true;
+}
+async function loadAgentHistory(){
+  if(!current?.sha256)return;
+  try{
+    const res=await fetch('/api/agent/history?sha256='+encodeURIComponent(current.sha256));
+    const data=await res.json();
+    if(!res.ok)throw Error(data.error||'Indisponível');
+    const rows=data.history||[];
+    $('agent-history').replaceChildren();
+    if(!rows.length){$('agent-history').textContent='Nenhuma investigação anterior deste binário.';return;}
+    for(const item of rows){
+      const row=document.createElement('div');row.className='list-row';
+      const label=document.createElement('span');label.textContent=item.created_at+' · '+item.goal;
+      const badge=document.createElement('small');badge.textContent=item.status+' · '+item.provider;
+      row.append(label,badge);$('agent-history').append(row);
+    }
+  }catch(e){$('agent-history').textContent='Histórico indisponível: '+e.message;}
+}
+$('agent-run').addEventListener('click',async()=>{
+  if(!current)return;
+  const btn=$('agent-run'), provider=$('provider').value;
+  const key=provider==='openrouter' ? $('openrouter-key').value : '';
+  const model=$('model').value.trim();
+  const authorized=$('agent-allow-test').checked;
+  btn.disabled=true;btn.textContent='Investigando…';
+  $('agent-status').textContent='Preparando evidências para o agente…';
+  try{
+    // One-click opt-in: load the optional Ghidra evidence before the model
+    // chooses which functions to inspect. The original executable is not run.
+    if(ghidraAvailable && selectedBinaryFile && !current.deep_analysis &&
+       ['ELF','PE (Windows)'].includes(current.binary?.format)){
+      $('agent-status').textContent='Executando análise estática Ghidra (opcional)…';
+      const deepResponse=await fetch('/api/ghidra/analyze?filename='+encodeURIComponent(selectedBinaryFile.name),{
+        method:'POST',headers:{'Content-Type':'application/octet-stream'},body:selectedBinaryFile});
+      const deeper=await deepResponse.json();
+      if(!deepResponse.ok)throw Error('Ghidra: '+(deeper.error||deepResponse.status));
+      if(deeper.sha256!==current.sha256)throw Error('O arquivo mudou durante a investigação.');
+      current.deep_analysis=deeper.deep_analysis;
+      renderDeep(current);
+    }
+    $('agent-status').textContent='IA selecionando ferramentas e registrando evidências…';
+    const response=await fetch('/api/agent/run',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({report:current,goal:$('agent-goal').value,provider,model,api_key:key,
+        allow_candidate_tests:authorized,steps:Number($('agent-steps').value)})});
+    const result=await response.json();
+    if(!response.ok)throw Error(result.error||`HTTP ${response.status}`);
+    lastAgentResult=result;
+    $('agent-status').textContent=result.status+' — '+result.summary;
+    $('agent-step-count').textContent=result.steps_used+' etapas';
+    $('agent-trace').replaceChildren();
+    for(const item of result.trace||[]){
+      const section=document.createElement('div');section.className='observation';
+      const heading=document.createElement('strong');heading.textContent='#'+item.step+' · '+item.tool;
+      const pre=document.createElement('pre');pre.className='code-preview';
+      pre.textContent=JSON.stringify(item.result,null,2);
+      section.append(heading,pre);$('agent-trace').append(section);
+    }
+    $('agent-source').textContent=result.candidate?.source||'Nenhum código reconstruído.';
+    $('agent-candidate-note').textContent=result.candidate
+      ? 'Hipótese: '+result.candidate.rationale+' | Teste: '+(result.candidate.verification?.status||'não solicitado')+' | Equivalência NÃO comprovada.'
+      : 'Nenhum candidato gerado. Investigação e limitações disponíveis acima.';
+    $('agent-export').disabled=false;
+    loadAgentHistory();
+  }catch(e){$('agent-status').textContent='Falha na investigação: '+e.message;}
+  finally{btn.disabled=false;btn.textContent='Iniciar investigação';}
+});
+$('agent-export').addEventListener('click',()=>{
+  if(lastAgentResult)download('reverselab-investigacao.json',JSON.stringify(lastAgentResult,null,2),'application/json');
+});
+fetch('/api/status').then(r=>r.json()).then(s=>{
+  $('agent-sandbox-status').textContent=s.sandbox?.message||'Status Docker indisponível.';
+}).catch(()=>{$('agent-sandbox-status').textContent='Não foi possível verificar Docker.';});

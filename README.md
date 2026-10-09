@@ -219,3 +219,15 @@ O servidor continua acessível **somente na própria máquina**. Se acessar pela
 
 - [Ghidra AnalyzeHeadless](https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/RuntimeScripts/support/analyzeHeadlessREADME.md)
 - [Ghidra DecompInterface](https://ghidra.re/ghidra_docs/api/ghidra/app/decompiler/DecompInterface.html)
+
+## v0.4 — Agente de engenharia reversa (experimental)
+
+Após analisar um arquivo, abra **Agente autônomo**. Escolha o provedor na aba **Assistente IA**, defina um objetivo e clique em **Iniciar investigação**. Se houver uma instalação Ghidra configurada, a interface realiza a análise aprofundada automaticamente após seu clique (somente para ELF/PE). O modelo então escolhe ferramentas de uma lista fechada, consulta funções, explora chamadas, registra hipóteses e pode gerar uma **reconstrução candidata em C** de uma função pequena. O número de chamadas ao modelo é limitado a seis por investigação.
+
+A reconstrução necessita de pseudocódigo Ghidra como evidência. A ausência de funções ou de Ghidra não pode ser "resolvida" inventando código. A base SQLite persiste **somente as investigações iniciadas** (inclusive código gerado), indexadas por SHA-256 para consulta posterior; o binário original e as chaves não são persistidos. Ajuste `REVERSELAB_DB_PATH` para escolher outro arquivo de histórico. Lembre-se de que dados extraídos podem conter informações privadas: o envio ao modelo externo só ocorre após o clique.
+
+O teste de C reconstruído está **desativado por padrão**. Para habilitá-lo, instale Docker, prepare a imagem `gcc:13` previamente e marque a caixa de autorização. O programa **original nunca é executado**; apenas o candidato gerado pode ser compilado e executado num container isolado, sem rede, com limites de recursos. Docker **não é uma sandbox resistente a ataques de kernel**, use uma VM dedicada para conteúdos adversariais. O programa também **não baixa** imagens automaticamente e **não** oferece fallback para `gcc` no host.
+
+**Testes aprovados sobre casos sugeridos pela IA não comprovam que a função seja equivalente à original.** Na v0.4 a assinatura reconstruída é restrita a `int target(int a, int b)` com até oito exemplos numéricos; exige validação independente antes de usar qualquer código recuperado.
+
+Rotas adicionais: `POST /api/agent/run` e `GET /api/agent/history?sha256=...`. Consulte `docs/ARQUITETURA.md` para contratos, limitações e segurança.
