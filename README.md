@@ -1,4 +1,4 @@
-# ReverseLab AI · MVP v0.2
+# ReverseLab AI · MVP v0.3 (Ghidra opcional)
 
 Ferramenta **local** para investigar executáveis e ROMs por **análise estática**, com assistência opcional de IA local, OpenRouter ou ChatGPT via Codex CLI.
 
@@ -35,6 +35,29 @@ gcc -O0 -g examples/hello.c -o examples/hello
 python -m reverselab analyze examples/hello --output exemplo-relatorio.md
 ```
 
+## Análise aprofundada com Ghidra Headless (v0.3)
+
+**Ghidra não é instalado automaticamente.** Instale a distribuição oficial em uma máquina isolada para arquivos não confiáveis e configure uma das variáveis:
+
+- Linux/macOS: `export GHIDRA_INSTALL_DIR=/caminho/para/ghidra`
+- Windows PowerShell: `$env:GHIDRA_INSTALL_DIR="C:\caminho\para\ghidra"`
+- Alternativa: `GHIDRA_HEADLESS` aponta diretamente para o arquivo `analyzeHeadless` (ou `.bat` no Windows).
+
+Inicie `python -m reverselab serve`, abra **Funções e chamadas**, carregue um ELF ou PE e clique em **Aprofundar com Ghidra**. Nenhum arquivo é enviado ao Ghidra sem seu comando. Alternativamente no terminal:
+
+```bash
+python -m reverselab analyze arquivo.elf --ghidra --format json --output investigacao.json
+python -m reverselab analyze arquivo.exe --ghidra --format md --output investigacao.md
+```
+
+A integração invoca o script `reverselab/ghidra_scripts/ReverseLabExport.py` como `-postScript` em um projeto temporário. Exporta até 100 funções, 48 chamadas por função, pseudocódigo limitado a 5.000 caracteres e grafo de até 600 arestas. Usa `-readOnly`, `-deleteProject`, `-max-cpu 2`, timeout interno de análise de 50 segundos e limite externo de 120 segundos. Resultados retornam à UI e podem ser exportados. A análise normal continua independente da instalação do Ghidra.
+
+**Segurança:** o Ghidra processa os bytes do executável, sem iniciar o executável-alvo. Porém é um parser/descompilador complexo, **não uma sandbox**. Para binários potencialmente hostis execute ReverseLab+Ghidra em uma VM sem acesso a seus arquivos, credenciais e rede. Os limites de tempo/CPU não garantem limite de RAM nem isolamento do sistema operacional. Não execute o serviço na rede pública.
+
+**IA por função:** selecione uma função após a análise e escolha **Explicar esta função com IA**. A consulta envia apenas a função selecionada (endereço, chamadas e pseudocódigo limitado) junto com a amostra de evidências estáticas. ChatGPT/Codex e OpenRouter são provedores remotos, enquanto o modelo local pode ficar offline.
+
+**Testes:** a v0.3 valida o contrato de integração, sem Ghidra instalado no ambiente de CI. Testes do caminho profundo usam saída Ghidra simulada e dois executáveis ELF compilados de verdade. **Ainda é necessária uma execução com Ghidra real** antes de considerar a integração verificada ponta a ponta.
+
 ## Funcionalidades disponíveis
 
 | Recurso | Estado |
@@ -49,10 +72,12 @@ python -m reverselab analyze examples/hello --output exemplo-relatorio.md
 | Desassemblagem multi-arquitetura | Opcional via `pip install capstone` |
 | IA para explicar evidências | Local, OpenRouter ou ChatGPT via Codex CLI |
 | Interface, JSON, Markdown | Implementado |
-| Pseudocódigo, fluxo de controle completo, reconstrução de fonte | Não implementado |
+| Funções, chamadas e pseudocódigo via Ghidra Headless | Implementado, exige Ghidra instalado; validação real pendente |
+| Grafo de chamadas | Arestas entre funções exportadas por Ghidra |
+| Fluxo de controle completo e reconstrução de fonte | Não implementado |
 | Execução, emulação, bypass de proteções | Fora do escopo deste MVP |
 
-O [Capstone](https://www.capstone-engine.org/) é uma dependência **opcional** para instruções adicionais (`pip install capstone`). O [LIEF](https://lief.re/doc/latest/) e o [Ghidra Headless](https://github.com/NationalSecurityAgency/ghidra) são candidatos para futuras versões; não são necessários ou integrados neste MVP.
+O [Capstone](https://www.capstone-engine.org/) é uma dependência **opcional** para instruções adicionais (`pip install capstone`). O [LIEF](https://lief.re/doc/latest/) ainda é candidato para futuras versões. O [Ghidra Headless](https://github.com/NationalSecurityAgency/ghidra) está integrado opcionalmente, sem ser empacotado.
 
 ## IA local (opcional)
 
@@ -188,3 +213,9 @@ O funcionamento de análise offline não mudou. O campo de modelo permite seleci
 ### Escopo e segurança
 
 O servidor continua acessível **somente na própria máquina**. Se acessar pela rede usando túneis, proxies ou encaminhamento de portas, acrescente autenticação e TLS antes de expor a interface. O uso de Codex pode envolver inferência remota, mesmo em modo `read-only`. A sandbox do Codex e a do `objdump` não substituem uma VM de segurança para análise de binários hostis. Jamais publique chaves ou tokens no GitHub.
+
+
+### Referências oficiais da integração
+
+- [Ghidra AnalyzeHeadless](https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/RuntimeScripts/support/analyzeHeadlessREADME.md)
+- [Ghidra DecompInterface](https://ghidra.re/ghidra_docs/api/ghidra/app/decompiler/DecompInterface.html)

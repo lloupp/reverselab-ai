@@ -429,6 +429,13 @@ def markdown_report(r: dict[str,Any]) -> str:
     lines.extend(f"- `{s}`" for s in b['imports'][:80])
     lines.extend(['','## Possíveis funções'])
     lines.extend(f"- `{f['name']}` em {f['address']} (símbolo)" for f in b['functions'][:80])
+    deep = r.get('deep_analysis')
+    if isinstance(deep, dict):
+        lines.extend(['','## Funções (Ghidra Headless)'])
+        for f in deep.get('functions', [])[:100]:
+            lines.append(f"- `{f['name']}` em `{f['address']}` → {', '.join(f['calls']) or 'sem chamadas identificadas'}")
+            if f.get('pseudocode'):
+                lines.extend(['','```c',f['pseudocode'],'```'])
     lines.extend(['','## Strings (amostra)'])
     lines.extend(f"- {s['offset']} [{s['encoding']}] {s['value']!r}" for s in r['strings'][:75])
     lines.extend(['','## Desassemblagem (amostra)',f"Backend: {r['disassembly']['backend']}",'','```asm'])

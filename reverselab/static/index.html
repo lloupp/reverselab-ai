@@ -15,11 +15,12 @@
         <div class="side-label">LABORATÓRIO</div>
         <button class="nav active" data-screen="overview"><span class="nav-icon">◈</span> Visão geral</button>
         <button class="nav" data-screen="sections"><span class="nav-icon">▦</span> Seções e símbolos</button>
+        <button class="nav" data-screen="ghidra"><span class="nav-icon">◇</span> Funções e chamadas</button>
         <button class="nav" data-screen="strings"><span class="nav-icon">≡</span> Strings</button>
         <button class="nav" data-screen="assembly"><span class="nav-icon">⌘</span> Desassemblagem</button>
         <button class="nav" data-screen="ai"><span class="nav-icon">✦</span> Assistente IA</button>
       </div>
-      <div class="sidebar-foot"><div class="status"><span class="dot"></span> Processo local · somente leitura</div><p>Os programas analisados nunca são executados.</p><span class="version">v0.2.0 · MVP</span></div>
+      <div class="sidebar-foot"><div class="status"><span class="dot"></span> Processo local · somente leitura</div><p>Os programas analisados nunca são executados.</p><span class="version">v0.3.0 · EXPERIMENTAL</span></div>
     </aside>
     <main class="main">
       <header class="top"><div class="breadcrumb">Workspace <span>/</span> <strong id="crumb">Visão geral</strong></div><div class="top-right"><span class="chip">OFFLINE-FIRST</span><span class="avatar">RL</span></div></header>
@@ -35,6 +36,18 @@
             <div class="info"><span>ⓘ</span><div>Esta análise é <strong>estática e preliminar</strong>. Evidências não comprovam comportamento em tempo de execução. Nenhum executável é iniciado.</div></div>
           </div>
           <div id="sections" class="screen" hidden><article class="panel"><div class="panel-head"><h3>Seções do binário</h3><span id="nsections" class="muted"></span></div><div class="table-scroll"><table><thead><tr><th>NOME</th><th>OFFSET</th><th>TAMANHO</th><th>EXECUTÁVEL</th></tr></thead><tbody id="sectionrows"></tbody></table></div></article><article class="panel panel-gap"><div class="panel-head"><h3>Funções e símbolos identificados</h3><span id="nfunctions" class="muted"></span></div><div id="functionrows" class="data-list"></div></article><article class="panel panel-gap"><div class="panel-head"><h3>Importações e dependências</h3><span id="nimports" class="muted"></span></div><div id="imports" class="tag-list"></div></article></div>
+          <div id="ghidra" class="screen" hidden>
+            <article class="panel">
+              <div class="panel-head"><div><h3>Investigação por função</h3><span class="muted">GHIDRA HEADLESS · EXECUÇÃO EXPLÍCITA</span></div><span class="badge">OPCIONAL</span></div>
+              <p class="ai-note">Executa o motor de análise Ghidra sobre o arquivo selecionado (não executa o programa analisado). O Ghidra é um analisador complexo e <strong>não constitui uma sandbox</strong>: investigue binários hostis em uma VM isolada. Inicialmente disponível para ELF/PE.</p>
+              <div class="ai-row"><span id="ghidra-status" class="muted">Verificando instalação…</span><button id="deep-analyze" class="primary" type="button" disabled>Aprofundar com Ghidra</button></div>
+            </article>
+            <div class="twocol panel-gap">
+              <article class="panel"><div class="panel-head"><h3>Funções detectadas</h3><span id="deep-count" class="muted">0</span></div><div id="deep-functions" class="data-list"></div></article>
+              <article class="panel"><div class="panel-head"><h3>Função selecionada</h3><span id="selected-address" class="muted">—</span></div><div id="selected-meta" class="muted">Nenhuma função selecionada.</div><pre id="selected-pseudocode" class="code-preview">Execute a análise aprofundada.</pre><button id="ask-function" class="quiet" type="button" disabled>Explicar esta função com IA →</button></article>
+            </div>
+            <article class="panel panel-gap"><div class="panel-head"><h3>Grafo de chamadas (arestas)</h3><span id="edges-count" class="muted">0</span></div><div id="edges-list" class="data-list"></div><p id="deep-note" class="muted">Aguardando análise com Ghidra.</p></article>
+          </div>
           <div id="strings" class="screen" hidden><article class="panel"><div class="panel-head"><div><h3>Strings identificadas</h3><span class="muted">AMOSTRA LIMITADA · NÃO EXAUSTIVA</span></div><input id="stringfilter" class="filter" placeholder="Filtrar strings…" aria-label="Filtrar strings"></div><div class="table-scroll"><table><thead><tr><th>OFFSET</th><th>CODIFICAÇÃO</th><th>CATEGORIA</th><th>VALOR</th></tr></thead><tbody id="stringrows"></tbody></table></div></article></div>
           <div id="assembly" class="screen" hidden><article class="panel"><div class="panel-head"><div><h3>Desassemblagem parcial</h3><div id="backend" class="muted"></div></div><span class="badge">SOMENTE LEITURA</span></div><div class="asm-head"><span>ENDEREÇO</span><span>BYTES</span><span>INSTRUÇÃO</span></div><div id="asmlines" class="asm"></div><div id="asmnote" class="inline-note"></div></article></div>
           <div id="ai" class="screen" hidden>

@@ -85,3 +85,15 @@ Para programas pequenos e livres, permitir que a IA proponha uma implementação
 ## Provedores de IA (v0.2)
 
 Adaptador `reverselab/ai.py`: provedor `local` restringe URL a loopback; `openrouter` usa origem HTTPS fixa e token por solicitação ou `OPENROUTER_API_KEY`; `chatgpt` integra o Codex CLI oficial instalado/autenticado pelo usuário via `codex login`. O app nunca lê credenciais de conta ChatGPT. Os três provedores usam apenas evidências estáticas limitadas. A interface é local e não persiste chaves. Testes simulam provedores HTTP e binários.
+
+
+## Incremento v0.3 — análise por função
+
+- `reverselab/ghidra.py`: identifica instalação, valida cabeçalhos ELF/PE, cria diretório temporário, executa Ghidra Headless de forma opt-in e valida JSON exportado.
+- `reverselab/ghidra_scripts/ReverseLabExport.py`: script Jython para Ghidra que exporta funções, endereços, chamadas e pseudocódigo do DecompInterface.
+- `POST /api/ghidra/analyze`: recebe os mesmos bytes da análise estática e retorna `deep_analysis`; requer clique explícito. `GET /api/status` informa `ghidra.available`.
+- `GET /api/status`: continua exibindo conexões dos provedores locais, Codex e Ghidra sem solicitar autenticação externa.
+- IA: envia apenas pseudocódigo de uma função selecionada, além de evidência estática limitada.
+- Não houve integração do grafo de fluxo de controle intrafunção (CFG): o grafo implementado é de **chamadas entre funções**.
+
+**Evidência de teste:** 31 testes locais, incluindo dois programas ELF reais de formatos válidos e integração com processo Ghidra simulado. Ghidra real indisponível neste ambiente, portanto a exportação Jython não foi verificada em runtime.

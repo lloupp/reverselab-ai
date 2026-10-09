@@ -10,3 +10,8 @@
 .field-note code{color:#b7cfff;background:#192844;border-radius:4px;padding:2px 5px}
 #models-status{display:inline-block;margin:8px 0 0 10px;line-height:1.5}
 #chatgpt-options .ai-row{margin:7px 0 13px}
+
+/* v0.3 function explorer */
+.code-preview {background:#080f20;color:#d2e7fe;overflow:auto;white-space:pre;max-height:480px;padding:14px;border-radius:10px;font-size:12px;line-height:1.5}
+.function-choice {display:block;width:100%;text-align:left;padding:10px 12px;cursor:pointer;border:0;border-bottom:1px solid rgba(125,140,180,.14);border-radius:0;background:transparent;color:inherit;font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
+.function-choice:hover,.function-choice.selected {background:rgba(83,116,230,.17)}
